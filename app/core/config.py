@@ -1,6 +1,6 @@
-from pydantic_settings import BaseSettings
-from typing import List, Dict, Any
+from pydantic import BaseSettings
 import os
+from typing import Optional, List, Dict, Any
 from functools import lru_cache
 
 class Settings(BaseSettings):
@@ -9,18 +9,24 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # Security
-    SECRET_KEY: str = "kUMAqmDBfEdHNJqrN6"  # Change this in production
-    ALGORITHM: str = "HS256"
+    JWT_SECRET_KEY: str
+    JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
     # Cookie settings
     COOKIE_NAME: str = "session_token"
     COOKIE_MAX_AGE: int = 30 * 24 * 60 * 60  # 30 days in seconds
     
-    # File upload settings
-    MAX_FILE_SIZE: int = 1024 * 1024  # 1MB in bytes
-    MAX_STORAGE_SIZE: int = 100 * 1024 * 1024  # 100MB in bytes
-    UPLOAD_DIR: str = "uploads"
+    # Database
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+    DATABASE_URL: Optional[str] = None
+    
+    # File storage
+    MAX_FILE_SIZE: int = 1048576  # 1MB in bytes
+    MAX_STORAGE_SIZE: int = 104857600  # 100MB in bytes
+    UPLOAD_DIR: str = "/app/uploads"
     ALLOWED_EXTENSIONS: List[str] = ['.txt', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.doc', '.docx']
     
     # CORS
@@ -38,10 +44,11 @@ class Settings(BaseSettings):
         }
 
     class Config:
+        env_file = ".env"
         case_sensitive = True
 
 @lru_cache()
-def get_settings():
+def get_settings() -> Settings:
     return Settings()
 
 settings = get_settings()
