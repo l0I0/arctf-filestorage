@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .auth-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .file-list {
+            margin-top: 20px;
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background-color: #f8f9fa;
+            margin: 8px 0;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+        }
+        .file-info {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .file-name {
+            font-weight: 500;
+            color: #212529;
+        }
+        .file-size {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        .file-date {
+            font-size: 0.9em;
+            color: #6c757d;
+        }
+        .file-actions {
+            display: flex;
+            gap: 10px;
+        }
+        .upload-form {
+            margin: 20px 0;
+            text-align: center;
+        }
+        button {
+            background-color: #0d6efd;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0b5ed7;
+        }
+        .delete-btn {
+            background-color: #dc3545;
+        }
+        .delete-btn:hover {
+            background-color: #bb2d3b;
+        }
+        input[type="text"],
+        input[type="password"] {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .error {
+            color: #dc3545;
+            margin: 10px 0;
+        }
+        .success {
+            color: #198754;
+            margin: 10px 0;
+        }
+        .storage-info {
+            text-align: center;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        .non-deletable {
+            color: #666;
+            font-style: italic;
+            font-size: 0.9em;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="auth-container" id="authContainer">
+        <div class="container">
+            <h2>Login</h2>
+            <div>
+                <input type="text" id="username" placeholder="Username">
+                <input type="password" id="password" placeholder="Password">
+                <button onclick="login()">Login</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <button onclick="showRegister()">Register New Account</button>
+            </div>
+        </div>
+        
+        <div class="container hidden" id="registerForm">
+            <h2>Register</h2>
+            <div>
+                <input type="text" id="regUsername" placeholder="Username">
+                <input type="password" id="regPassword" placeholder="Password">
+                <button onclick="register()">Register</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container hidden" id="fileContainer">
+        <div class="storage-info" id="storageInfo"></div>
+        
+        <div class="upload-form">
+            <h2>Upload File</h2>
+            <input type="file" id="fileInput">
+            <button onclick="uploadFile()">Upload</button>
+            <div id="uploadStatus"></div>
+        </div>
+
+        <div class="file-list">
+            <h2>Your Files</h2>
+            <div id="filesList">
+                <div v-for="file in files" :key="file.id" class="file-item">
+                    <div class="file-info">
+                        <span class="file-name">{{ file.filename }}</span>
+                        <span class="file-size">Size: {{ formatFileSize(file.size) }}</span>
+                        <span class="file-date">Uploaded: {{ formatDate(file.upload_date) }}</span>
+                    </div>
+                    <div class="file-actions">
+                        <button @click="downloadFile(file.id)" class="btn btn-primary">Download</button>
+                        <button v-if="file.is_deletable" @click="deleteFile(file.id)" class="btn btn-danger">Delete</button>
+                    </div>
+                </div>
+                <div v-if="files.length === 0" class="no-files">
+                    No files uploaded yet.
+                </div>
+            </div>
+        </div>
+        
+        <button onclick="logout()" style="margin-top: 20px;">Logout</button>
+    </div>
+
+    <script>
+        async function register() {
+            const username = document.getElementById('regUsername').value;
+            const password = document.getElementById('regPassword').value;
+            
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                if (response.ok) {
+                    alert('Registration successful! Please login.');
+                    document.getElementById('registerForm').classList.add('hidden');
+                } else {
+                    const error = await response.json();
+                    alert(`Registration failed: ${error.detail}`);
+                }
+            } catch (error) {
+                alert(`Registration failed: ${error.message}`);
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('password', password);
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    showFileContainer();
+                    loadFiles();
+                    updateStorageInfo();
+                } else {
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.indexOf("application/json") !== -1) {
+                        const error = await response.json();
+                        alert(`Login failed: ${error.detail}`);
+                    } else {
+                        alert('Login failed: Invalid credentials');
+                    }
+                }
+            } catch (error) {
+                alert('Login failed: Please check your credentials');
+            }
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch('/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    showAuthContainer();
+                } else {
+                    alert('Logout failed');
+                }
+            } catch (error) {
+                alert(`Logout failed: ${error.message}`);
+            }
+        }
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/users/me', {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    showFileContainer();
+                    loadFiles();
+                    updateStorageInfo();
+                } else {
+                    showAuthContainer();
+                }
+            } catch (error) {
+                showAuthContainer();
+            }
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const statusDiv = document.getElementById('uploadStatus');
+            
+            if (!fileInput.files.length) {
+                statusDiv.innerHTML = '<p class="error">Please select a file first</p>';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    credentials: 'include',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    statusDiv.innerHTML = '<p class="success">File uploaded successfully!</p>';
+                    fileInput.value = '';
+                    loadFiles();
+                    updateStorageInfo();
+                } else {
+                    const error = await response.json();
+                    statusDiv.innerHTML = `<p class="error">Upload failed: ${error.detail}</p>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = `<p class="error">Upload failed: ${error.message}</p>`;
+            }
+        }
+
+        async function loadFiles() {
+            const filesDiv = document.getElementById('filesList');
+            
+            try {
+                const response = await fetch('/files', {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const files = await response.json();
+                    filesDiv.innerHTML = files.map(file => `
+                        <div class="file-item">
+                            <div class="file-info">
+                                <span class="file-name">${file.filename}</span>
+                                <span class="file-size">Size: ${formatFileSize(file.size)}</span>
+                                <span class="file-date">Uploaded: ${formatDate(file.upload_date)}</span>
+                            </div>
+                            <div class="file-actions">
+                                <button onclick="downloadFile(${file.id})" class="btn btn-primary">Download</button>
+                                ${file.is_deletable ? 
+                                    `<button onclick="deleteFile(${file.id})" class="btn btn-danger">Delete</button>` : 
+                                    ''}
+                            </div>
+                        </div>
+                    `).join('');
+                    if (files.length === 0) {
+                        filesDiv.innerHTML += '<div class="no-files">No files uploaded yet.</div>';
+                    }
+                } else {
+                    filesDiv.innerHTML = '<p class="error">Failed to load files</p>';
+                }
+            } catch (error) {
+                filesDiv.innerHTML = `<p class="error">Error loading files: ${error.message}</p>`;
+            }
+        }
+
+        async function downloadFile(fileId) {
+            try {
+                const response = await fetch(`/download/${fileId}`, {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = '';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    a.remove();
+                } else {
+                    alert('Failed to download file');
+                }
+            } catch (error) {
+                alert(`Error downloading file: ${error.message}`);
+            }
+        }
+
+        async function deleteFile(fileId) {
+            if (!confirm('Are you sure you want to delete this file?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/files/${fileId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    loadFiles();
+                    updateStorageInfo();
+                } else {
+                    alert('Failed to delete file');
+                }
+            } catch (error) {
+                alert(`Error deleting file: ${error.message}`);
+            }
+        }
+
+        async function updateStorageInfo() {
+            try {
+                const response = await fetch('/storage-info', {
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    const info = await response.json();
+                    const storageDiv = document.getElementById('storageInfo');
+                    storageDiv.innerHTML = `
+                        <h3>Storage Usage</h3>
+                        <p>Used: ${info.used.formatted.size} ${info.used.formatted.unit} / Total: ${info.total.formatted.size} ${info.total.formatted.unit}</p>
+                        <p>Files: ${info.files_count}</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error updating storage info:', error);
+            }
+        }
+
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatFileSize(size) {
+            return formatSize(size);
+        }
+
+        function formatDate(date) {
+            const dateObj = new Date(date);
+            return dateObj.toLocaleString();
+        }
+
+        function showRegister() {
+            document.getElementById('registerForm').classList.remove('hidden');
+        }
+
+        function showAuthContainer() {
+            document.getElementById('authContainer').classList.remove('hidden');
+            document.getElementById('fileContainer').classList.add('hidden');
+        }
+
+        function showFileContainer() {
+            document.getElementById('authContainer').classList.add('hidden');
+            document.getElementById('fileContainer').classList.remove('hidden');
+        }
+
+        checkAuth();
+    </script>
+</body>
+</html>
